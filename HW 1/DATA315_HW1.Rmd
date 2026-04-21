@@ -1,0 +1,315 @@
+---
+title: "HW 1"
+author: "Alena Zeng"
+output: pdf_document
+date: "2026-03-31"
+urlcolor: blue
+---
+
+For this assignment, I use the grammar of graphics API ggplot2 to conduct exploratory analysis of a subset of the Census 2000 data. This [dataset](https://www.icpsr.umich.edu/sites/view/studies/113738) consists of individuals from the 1 percent and 5 percent Integrated Public Use Microsample Series files who are currently aged 25–55, immigrated to the United States before age 15, and have nonmissing own age, year of immigration, country of birth, and English-speaking ability variables. 
+
+# Load data
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(foreign)
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+```
+
+```{r}
+indiv <- read.dta("p00use_mf_indiv.dta")
+paste("There are", nrow(indiv), "individuals in the sample, with", ncol(indiv), "features")
+```
+
+# Univariate summaries
+
+I begin the exploratory analysis by visualizing the distribution of some demographic variables for the individual immigrants. Here, the bimodal distribution indicates that child immigrants tend to arrive to the US either at birth/ in infancy or as teens, with fewer respondents arriving as young children. We also see that the vast majority of the respondents are white, followed by Asian/Pacific Islander and the Other race category (which captures the American Indian/Alaska Native label and the residual category for any other race not classified elsewhere in the Census). The average age of the respondents is 37 years old. 
+
+## Demographics
+
+```{r, fig.show='hold', out.width='50%'}
+ggplot(indiv, aes(x = agearr)) + geom_bar() +
+  labs(x = "Age at arrival", y = "Count", 
+       title = "Distribution of age at arrival to US across respondents") +
+  theme_minimal()
+
+ggplot(indiv, aes(x = factor(case_when(
+  race == 1 ~ "White",
+  race == 2 ~ "Black",
+  race %in% c(4, 5, 6) ~ "Asian/PI",
+  race %in% c(7, 3) ~ "Other",
+  race %in% c(8, 9) ~ "Multi",
+  TRUE ~ "Unknown")))) + geom_bar() +
+  labs(x = "Race",
+       y = "Count",
+       title = "Distribution of race across respondents") + 
+  theme_minimal()
+```
+
+We also see some disparities in English speaking proficiency in the data. While most respondents speak English very well as adults, there is a small number that does not speak English at all or only speaks some English. Difficulties in speaking ability, as a language barrier and as a feature that is correlated with the opportunities one is able to access in the US, likely influences their social and labor outcomes, which I will explore in the following sections. Most immigrants tend to live together in families of under 5 members, though few form much larger residences. A small number tend to live in geographic areas with higher populations of other immigrants from the same country of origin, suggesting the presence of immigrant ethnic communities around the US.
+
+
+```{r, fig.show='hold', out.width='33%'}
+ggplot(indiv, aes(x= factor(case_when(
+  eng == 0 ~ "Does not speak English",
+  eng == 1 ~ "Speaks at least some English",
+  eng == 2 ~ "Speaks English well",
+  eng == 3 ~ "Speaks english very well")))) + geom_bar() +
+  labs(x = "English speaking proficiency",
+       y = "Count",
+       title = "Distribution of English speaking proficiency across respondents") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=90)) 
+
+ggplot(indiv, aes(x=famsize)) + geom_histogram(bins=15) +
+  labs(x = "Number of own family members residing with each individual, 
+       including themselves",
+       y = "Count",
+       title = "Count of family members in residence across respondents") +
+  theme_minimal()
+
+ggplot(indiv, aes(x=share_bpld_minusself)) + geom_histogram(bins=15) +
+ labs(x = "Fraction of PUMA (geographic unit) total population 
+      with same birthplace as respondent", y = "Count",
+      title = "Distribution of immigrants living in geographic units 
+      with others from the same birthplace") +
+  theme_minimal()
+```
+
+## Social and labor outcomes
+
+Next, I visualize the distribution of specific features in the data relating to social and labor outcomes in adulthood: income/wages, educational attainment, citizenship, and marriage. Most respondents complete high school (attaining at least 12 years of schooling), with some earning advanced degrees with up to 20 years of education. By adulthood, most child immigrants also become naturalized citizens and get married. Lastly, there is a wide, right-skewed distribution of incomes with the longer upper tail across individuals, but most earn $100k or less in a year.
+
+
+```{r, fig.show='hold', out.width='50%'}
+ggplot(indiv, aes(x=yrssch)) + geom_bar() + 
+  labs(x = "Years of schooling",
+       y = "Count",
+       title = "Distribution of years of schooling across respondents") +
+  theme_minimal()
+
+ggplot(indiv, aes(x=wagely)) + geom_histogram(bins=50) + 
+  labs(x = "Total pre-tax wage and salary income",
+       y = "Count",
+       title = "Distribution of income across respondents") +
+  theme_minimal()
+```
+
+```{r, fig.show='hold', out.width='50%'}
+ggplot(indiv, aes(x = factor(case_when(
+  citizen == 1 ~ "Born abroad of American parents",
+  citizen == 2 ~ "Naturalized citizen",
+  citizen == 3 ~ "Not a citizen")))) + geom_bar() +
+  labs(x = "Citizenship status",
+       y = "Count",
+       title = "Distribution of citizenship across respondents") +
+  theme_minimal()
+
+ggplot(indiv, aes(x=factor(case_when(
+  marriedpresent == 1 ~ "Yes", marriedpresent == 0 ~ "No")))) + geom_bar() +
+  labs(x = "Currently married with spouse present",
+       y = "Count",
+       title = "Distribution of marriage outcomes across respondents") +
+  theme_minimal()
+```
+
+# Bivariate summaries
+
+I create bivariate visualizations to understand how individuals' demographic features may correlate with social outcomes later in life, and how certain social factors like education are correlated with other socioeconomic outcomes. 
+
+With respect to labor outcomes, there doesn't seem to be any strong correlations between the immigrant's age at arrival and their annual income, as the income quartiles and outliers of the boxplots are similar across age groups, nor are there strong correlations between income and hours worked per week. However, years of schooling does correlate positively with an individual's income, with the highest median incomes being for those with 16-20 years of education, which likely reflects the fact that advanced secondary and post-secondary education can unlock higher paying jobs.
+
+
+```{r, fig.show='hold', out.width='33%'}
+ggplot(indiv, aes(x = factor(agearr), y = wagely)) +
+  geom_boxplot() +
+  labs(x = "Age at arrival", y = "Income",
+       title = "Income distribution by immigrant's age at arrival") +
+  theme_minimal()
+
+ggplot(indiv, aes(x = factor(yrssch), y = wagely)) +
+  geom_boxplot() +
+  labs(x = "Years of schooling", y = "Income",
+       title = "Income distribution by years of schooling") +
+  theme_minimal()
+
+ggplot(indiv, aes(x=uhrswork, y=wagely)) + geom_point() +
+  labs(x = "Number of hours per week the respondent usually worked",
+       y = "Total pre-tax wage and salary income",
+       title = "Income vs. hours worked per week across respondents") +
+  theme_minimal()
+```
+
+In the next set of bar charts, I create bivariate summaries of the relationship between the immigrant's age at arrival and other variables. We see that immigrants that arrive to the US as younger children tend to have the best English speaking ability, with the proportion of respondents who did not speak English well increasing for immigrants who arrived in their teens and pre-teens. Research on language acquisition has shown that it tends to be easier for kids to learn new languages when immersed in them young, which matches the observed pattern here. However, there may also be other unobserved factors or conditions in their home country or family background that both influenced the later ages at arrival and the observed level of assimilation to the English language and culture.
+
+Similarly, the age at arrival also has a negative correlation with educational attainment, with the proportion of individuals who do not graduate high school rising with their age of arrival. On the other hand, labor force participation follows different trends: the number of respondents who are not in the labor force remains similarly low (under 5,000) across all age at arrival groups. 
+
+
+```{r, fig.show='hold', out.width='33%'}
+ggplot(indiv, aes(x = factor(agearr), fill = factor(
+  case_when(engspkw == 0 ~ "No", engspkw == 1 ~ "Yes")))) + 
+  geom_bar(position = "dodge") + 
+  labs(x = "Age at arrival", y = "Count", 
+       title = "English speaking ability by immigrant age at arrival") +
+  guides(fill=guide_legend(title="Speaks English well or very well")) + 
+  theme_minimal()
+
+ggplot(indiv, aes(x = factor(agearr), fill = factor(hsdipl))) + ## or colldipl
+  geom_bar(position = "dodge") + 
+  labs(x = "Age at arrival", y = "Count", 
+       title="Education attainment by immigrant age at arrival") +
+  guides(fill=guide_legend(title="High school graduate")) +
+  theme_minimal()
+
+ggplot(indiv, aes(x=factor(agearr), fill = 
+                    factor(case_when(labforce == 1 ~ "Not in labor force",
+                                     labforce == 2 ~ "In labor force")))) + 
+  geom_bar(position = "dodge") +
+  guides(fill=guide_legend(title="Labor force participation")) +
+  labs(x = "Years of schooling", y = "Count", 
+       title="Labor force participation by age at arrival") +
+  theme_minimal()
+```
+Lastly, we see that having less schooling or immigrating to the US later are both factors that are positively correlated with respondents choosing to live in or forming communities with a higher proportion of other immigrants from the same country of origin. Lower levels of education in particular are a strong predictor of the formation of ethnic enclaves, with the median proportion being as high as 10% with 7 or fewer years of schooling, likely because living in a community with those of a shared language and cultural background allows individuals to leverage established community networks for economic and social opportunities, even with less formal education.
+
+```{r, fig.show='hold', out.width='50%'}
+ggplot(indiv, aes(x=factor(yrssch), y=share_bpld_minusself)) + 
+  geom_boxplot() +
+  labs(x = "Years of schooling",
+       y = "Fraction of PUMA (geographic unit) total population 
+       with same birthplace as respondent",
+       title = "Residence with others from the same birthplace 
+       vs. years of schooling") +  theme_minimal()
+
+ggplot(indiv, aes(x=factor(agearr), y=share_bpld_minusself)) + 
+  geom_boxplot() +
+  labs(x = "Age at arrival",
+       y = "Fraction of PUMA (geographic unit) total population 
+       with same birthplace as respondent",
+       title = "Residence with others from the same birthplace 
+       vs. age at arrival") +  theme_minimal()
+```
+
+
+# Additional visualizations and interpretation
+
+I created further visualizations to explore possible interaction effects between the variables identified from the initial univariate and bivariate visualizations. Because the income distribution was quite right-skewed, I used the log-transformed version of the variable (called lnwagely in the dataset) going forward to create a more symmetrical distribution and convert multiplicative relationships into additive ones to better visualize differences in earnings. 
+
+From this first heatmap, which visualizes how the average income varies by age at arrival and educational attainment, we again see that years of schooling still has the strongest positive correlation with earnings, across the different age at arrival groups. However, we also know from the previous bar chart that immigrants arriving to the US at different ages do not achieve the same education levels at the same rate—it's harder for individuals to complete high school when they immigrate to the US when they're older. This makes me wonder: is the immigrant's age at arrival correlated with any other observed variable in how it potentially affects the years of schooling, which in turn has some influence on labor outcomes?
+
+```{r}
+indiv %>%
+  filter(!is.na(yrssch), !is.na(agearr), !is.na(lnwagely)) %>%
+  mutate(
+    schooling_bin = cut(
+      yrssch,
+      breaks = c(0, 5, 8, 12, 16, 20),
+      labels = c("0-5", "6-8", "9-12 (HS)", "13-16 (College)", "17-20+"),
+      include.lowest = TRUE
+    ),
+    agearr_bin = cut(
+      agearr,
+      breaks = c(0, 5, 10, 15),
+      labels = c("0–5", "6–10", "11–14"),
+      include.lowest = TRUE
+    )
+  ) %>%
+  group_by(agearr_bin, schooling_bin) %>%
+  summarize(
+    mean_log_wage = mean(lnwagely, na.rm = TRUE),
+    n = n(),
+    .groups = "drop"
+  ) %>%
+  filter(n >= 30) %>%
+  ggplot(aes(x = schooling_bin, y = agearr_bin, fill = mean_log_wage)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(mean_log_wage, 2)), size = 3) +
+  scale_fill_gradient(
+    low = "#08306B",
+    high = "#41B6C4",
+    name = "Mean log wage\n(~10 = ~$22k, 11 = ~$60k)"
+  ) +
+  labs(
+    x = "Years of schooling (binned)",
+    y = "Age at arrival (binned)",
+    title = "Wages increase strongly with education, with smaller differences 
+    by age at arrival",
+    subtitle = "Cells with n < 30 removed") +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid = element_blank(),
+    axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+The next plots show that immigrants belonging to the "Other" race category tend to have the fewest years of schooling on average, with older childhood immigrants having the least education, while immigrants that are Asian or Pacific Islander who arrive to the US at a younger age (10 or under) tend to have the best outcomes. Moreover, immigrants who do not speak English well or very well consistently have the lowest years of schooling, while the age at arrival variable has a secondary, smaller negative effect on schooling. Among respondents with the same English ability, those who arrived later tend to have slightly fewer years of schooling. Together, these observations suggest that English ability is the primary factor associated with schooling outcomes, and English proficiency is likely acting as a mediator in the relationship between age at arrival and education. 
+
+Lastly, the third heatmap shows that it is likely a combination of high English proficiency and being highly educated that results in the highest individual earnings, as we can see there are still some respondents who complete high school but do not speak English well, and have lower earnings than others across the English proficency groups that have the same amount of education. 
+
+```{r, fig.show='hold', out.width='33%'}
+indiv %>%
+  mutate(race_label = case_when(
+    race == 1 ~ "White",
+    race == 2 ~ "Black",
+    race %in% c(4, 5, 6) ~ "Asian/PI",
+    race %in% c(7, 3) ~ "Other",
+    race %in% c(8, 9) ~ "Multi",
+    TRUE ~ "Unknown")) %>%
+  group_by(agearr, race_label) %>%
+  summarize(mean_log_wage = mean(yrssch, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = factor(race_label), y = agearr, fill = mean_log_wage)) +
+  geom_tile() +
+  labs(
+    x = "Race",
+    y = "Age at arrival",
+    fill = "Mean years of schooling",
+    title = "Mean years of schooling by race and age at arrival"
+  ) +
+  theme_minimal()
+
+indiv %>%
+  mutate(eng_label = case_when(
+    eng == 0 ~ "Does not speak English",
+    eng == 1 ~ "Speaks at least some English",
+    eng == 2 ~ "Speaks English well",
+    eng == 3 ~ "Speaks English very well"
+  )) %>%
+  group_by(agearr, eng_label) %>%
+  summarize(mean_yrs_schooling = mean(yrssch, na.rm = TRUE), 
+            .groups = "drop") %>%
+  ggplot(aes(x = factor(agearr), y = eng_label, fill = mean_yrs_schooling)) +
+  geom_tile() +
+  labs(
+    x = "Age at arrival",
+    y = "English ability",
+    fill = "Mean years of schooling",
+    title = "Mean years of schooling by age at arrival and English ability"
+  ) +
+  theme_minimal()
+
+indiv %>%
+  mutate(eng_label = case_when(
+    eng == 0 ~ "Does not speak English",
+    eng == 1 ~ "Speaks at least some English",
+    eng == 2 ~ "Speaks English well",
+    eng == 3 ~ "Speaks English very well"
+  )) %>%
+  group_by(yrssch, eng_label) %>%
+  summarize(mean_log_wage = mean(lnwagely, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = factor(yrssch), y = eng_label, fill = mean_log_wage)) +
+  geom_tile() +
+  labs(
+    x = "Years of schooling",
+    y = "English ability",
+    fill = "Mean log wage",
+    title = "Mean log wage by schooling and English ability"
+  ) +
+  theme_minimal()
+```
+
+# Conclusion
+
+The series of visualizations through this exploratory analysis give us a stronger visual understanding of the causal relationships between key demographic and outcome variables in the data. We see that an immigrant's age at arrival to the US affects English language acquisition, which in turn affects the communities they live in, their educational attainment, and their labor force participation and yearly income. The strongest predictors for labor outcomes is the combination of a high number of years of schooling and English language proficiency, and we see from this data that immigrants who exhibit those traits tend to have arrived to the US at younger ages. At the same time, I'd want to be able to better disentangle the relationship between English language ability and education—is it that more formal education in the US improves one's English, or that being more proficient in English growing up ensures that one is able to make the most of the educational opportunities that they have? I'm also curious about if there are any other factors that influence both schooling and income that are not observed in this dataset, though this would likely need to be contextualized qualitatively by other research on immigrant outcomes and economic opportunities.  
+
+
